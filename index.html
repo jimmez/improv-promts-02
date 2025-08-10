@@ -1,6 +1,3 @@
-
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -944,13 +941,42 @@
       try {
         const text = await file.text();
         const data = JSON.parse(text);
+        applyImportedData(data, true);
+        alert('Import complete ✅');
+      } catch (err) {
+        console.error(err);
+        alert('Import failed. Please select a valid JSON backup file.');
+      } finally {
+        importFile.value = '';
+      }
+    });
 
-        if (!data || typeof data !== 'object') throw new Error('Invalid file');
+    // >>>>>>>>>>>>>>> ADDED: load JSON from repo on first visit <<<<<<<<<<<<<<<
+    async function loadInitialFromRepoJson() {
+      // Only auto-import once. Remove the flag if you want to re-import.
+      if (localStorage.getItem('initializedFromRepoJson') === 'true') return;
 
-        if (data.lists && typeof data.lists === 'object') {
-          LETTERS.forEach(l => { lists[l] = Array.isArray(data.lists[l]) ? data.lists[l] : []; });
-          LETTERS.forEach(l => localStorage.setItem('promptList_' + l, JSON.stringify(lists[l])));
-        }
+      try {
+        const res = await fetch('improv01.json?v=' + Date.now(), { cache: 'no-store' });
+        if (!res.ok) return; // if missing, silently skip
+        const data = await res.json();
+        applyImportedData(data, false);
+        localStorage.setItem('initializedFromRepoJson', 'true');
+        console.log('Initialized from improv01.json ✅');
+      } catch (e) {
+        console.warn('Could not load improv01.json (skipping):', e);
+      }
+    }
+
+    // Accepts either your backup schema OR a simple {title, items} form
+    function applyImportedData(data, showUIRefresh){
+      if (!data || typeof data !== 'object') throw new Error('Invalid file');
+
+      if (data.lists && typeof data.lists === 'object') {
+        // Full backup schema
+        LETTERS.forEach(l => { lists[l] = Array.isArray(data.lists[l]) ? data.lists[l] : []; });
+        LETTERS.forEach(l => localStorage.setItem('promptList_' + l, JSON.stringify(lists[l])));
+
         if (data.names && typeof data.names === 'object') {
           names = { ...defaultNames, ...data.names };
           localStorage.setItem('promptListNames', JSON.stringify(names));
@@ -966,15 +992,27 @@
           }
           randomVoicePerPrompt = !!s.randomVoicePerPrompt;
         }
+      } else if (Array.isArray(data.items)) {
+        // Simple seed: put items into List A
+        lists['A'] = data.items.map(x => String(x));
+        localStorage.setItem('promptList_A', JSON.stringify(lists['A']));
+        if (data.title) {
+          names['A'] = String(data.title);
+          localStorage.setItem('promptListNames', JSON.stringify(names));
+        }
+      } else {
+        throw new Error('JSON must include either {lists:{...}} or {items:[...]}.');
+      }
 
-        // persist
-        localStorage.setItem('soundOn', soundOn);
-        localStorage.setItem('autoPlay', autoPlay);
-        localStorage.setItem('volume', volume.toFixed(3));
-        localStorage.setItem('rate', rate.toFixed(3));
-        localStorage.setItem('combineSequence', JSON.stringify(combineSequence));
-        localStorage.setItem('randomVoicePerPrompt', randomVoicePerPrompt);
+      // persist common settings
+      localStorage.setItem('soundOn', soundOn);
+      localStorage.setItem('autoPlay', autoPlay);
+      localStorage.setItem('volume', volume.toFixed(3));
+      localStorage.setItem('rate', rate.toFixed(3));
+      localStorage.setItem('combineSequence', JSON.stringify(combineSequence));
+      localStorage.setItem('randomVoicePerPrompt', randomVoicePerPrompt);
 
+      if (showUIRefresh) {
         updateListButtonsTexts();
         updateNameInputs();
         updateSoundButton();
@@ -985,51 +1023,23 @@
         updateAudioStatus();
         refreshSequenceBadges();
         switchList(currentList);
-
-        alert('Import complete ✅');
-      } catch (err) {
-        console.error(err);
-        alert('Import failed. Please select a valid JSON backup file.');
-      } finally {
-        importFile.value = '';
       }
-    });
+    }
+    // >>>>>>>>>>>>>>> END ADDED BLOCK <<<<<<<<<<<<<<<
 
     // ===== Boot =====
     buildListButtons();
     buildNamesPanel();
     buildSequencePanel();
-    loadSettings();
-    switchList('A');
-  </script>
-  <!-- Elements to display the JSON data -->
-<h1 id="title">Loading...</h1>
-<ul id="list"></ul>
 
-<script>
-  fetch('./improv01.json?v=' + Date.now()) // cache-buster
-    .then(r => {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    })
-    .then(data => {
-      // Show the title from JSON
-      document.getElementById('title').textContent = data.title || 'No title';
-
-      // Show the items from JSON
-      const ul = document.getElementById('list');
-      ul.innerHTML = '';
-      (data.items || []).forEach(item => {
-        const li = document.createElement('li');
-        li.textContent = item;
-        ul.appendChild(li);
+    // 1) Try to import from repo JSON once (if present)
+    loadInitialFromRepoJson()
+      .finally(() => {
+        // 2) Load settings from localStorage and show UI
+        loadSettings();
+        switchList('A');
       });
-    })
-    .catch(err => {
-      console.error('Failed to load JSON:', err);
-      document.getElementById('title').textContent = 'Failed to load JSON';
-    });
-</script>
+  </script>
 
 </body>
 </html>
