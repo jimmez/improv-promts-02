@@ -346,7 +346,7 @@
 <body>
 
   <!-- Note -->
-  <div id="stamp">jimmy james - 10.08.2025 - kl 13:26 - v.04</div>
+  <div id="stamp">jimmy james - 10.08.2025 - kl 13:26 - v.05</div>
 
   <div class="controls">
 
@@ -670,7 +670,10 @@
     function closeModal() { document.getElementById('modal').style.display = 'none'; }
     function savePrompts() {
       lists[currentList] = document.getElementById('promptEditor').value
-        .trim().split('\n').map(x => x.trim()).filter(Boolean);
+        .trim()
+        .split('\n')
+        .map(x => cleanItem(x))        // << clean on save
+        .filter(Boolean);
       localStorage.setItem('promptList_' + currentList, JSON.stringify(lists[currentList]));
       closeModal();
       generatePrompt();
@@ -683,18 +686,28 @@
       return list.length === 0 ? null : randFrom(list);
     }
 
+    // --- CLEANING: strip leading "- " and extra spaces
+    function cleanItem(item) {
+      return String(item).replace(/^\s*-\s*/, '').replace(/\s+/g, ' ').trim();
+    }
+
     function generatePrompt() {
       let html = '';
       if (combineSequence.length > 0) {
         const parts = [];
         combineSequence.forEach(l => {
           const item = getRandomFrom(l);
-          if (item !== null) parts.push(`<span class="w${l}">${escapeHtml(item)}</span>`);
+          if (item !== null) {
+            const cleaned = cleanItem(item);     // << clean on display
+            if (cleaned) parts.push(`<span class="w${l}">${escapeHtml(cleaned)}</span>`);
+          }
         });
         html = parts.length ? parts.join(' ') : 'No prompts in selected lists';
       } else {
         const item = getRandomFrom(currentList);
-        html = item ? `<span class="w${currentList}">${escapeHtml(item)}</span>` : `[No items in ${escapeHtml(getListName(currentList))}]`;
+        const cleaned = item ? cleanItem(item) : null; // << clean on display
+        html = cleaned ? `<span class="w${currentList}">${escapeHtml(cleaned)}</span>`
+                       : `[No items in ${escapeHtml(getListName(currentList))}]`;
       }
       output.innerHTML = html;
 
@@ -914,7 +927,7 @@
     // ===== Export / Import JSON =====
     exportBtn.addEventListener('click', () => {
       const data = {
-        version: 'pg-10lists-seq-v04',
+        version: 'pg-10lists-seq-v05',
         lists,
         names,
         settings: {
@@ -951,14 +964,12 @@
       }
     });
 
-    // >>>>>>>>>>>>>>> ADDED: load JSON from repo on first visit <<<<<<<<<<<<<<<
+    // >>>>>>>>>>>>>>> LOAD JSON FROM REPO ON FIRST VISIT <<<<<<<<<<<<<<<
     async function loadInitialFromRepoJson() {
-      // Only auto-import once. Remove the flag if you want to re-import.
       if (localStorage.getItem('initializedFromRepoJson') === 'true') return;
-
       try {
         const res = await fetch('improv01.json?v=' + Date.now(), { cache: 'no-store' });
-        if (!res.ok) return; // if missing, silently skip
+        if (!res.ok) return;
         const data = await res.json();
         applyImportedData(data, false);
         localStorage.setItem('initializedFromRepoJson', 'true');
@@ -975,34 +986,37 @@
       if (data.lists && typeof data.lists === 'object') {
         // Full backup schema
         LETTERS.forEach(l => { lists[l] = Array.isArray(data.lists[l]) ? data.lists[l] : []; });
-        LETTERS.forEach(l => localStorage.setItem('promptList_' + l, JSON.stringify(lists[l])));
 
-        if (data.names && typeof data.names === 'object') {
-          names = { ...defaultNames, ...data.names };
-          localStorage.setItem('promptListNames', JSON.stringify(names));
-        }
-        if (data.settings) {
-          const s = data.settings;
-          soundOn = !!s.soundOn;
-          autoPlay = !!s.autoPlay;
-          volume = Math.max(0, Math.min(1, +s.volume || 1));
-          rate = Math.max(0.6, Math.min(1.6, +s.rate || 1));
-          if (Array.isArray(s.combineSequence)) {
-            combineSequence = s.combineSequence.filter(x => LETTERS.includes(x));
-          }
-          randomVoicePerPrompt = !!s.randomVoicePerPrompt;
-        }
       } else if (Array.isArray(data.items)) {
         // Simple seed: put items into List A
         lists['A'] = data.items.map(x => String(x));
-        localStorage.setItem('promptList_A', JSON.stringify(lists['A']));
-        if (data.title) {
-          names['A'] = String(data.title);
-          localStorage.setItem('promptListNames', JSON.stringify(names));
-        }
       } else {
         throw new Error('JSON must include either {lists:{...}} or {items:[...]}.');
       }
+
+      // Names (optional)
+      if (data.names && typeof data.names === 'object') {
+        names = { ...defaultNames, ...data.names };
+      }
+      // Settings (optional)
+      if (data.settings) {
+        const s = data.settings;
+        soundOn = !!s.soundOn;
+        autoPlay = !!s.autoPlay;
+        volume = Math.max(0, Math.min(1, +s.volume || 1));
+        rate = Math.max(0.6, Math.min(1.6, +s.rate || 1));
+        if (Array.isArray(s.combineSequence)) {
+          combineSequence = s.combineSequence.filter(x => LETTERS.includes(x));
+        }
+        randomVoicePerPrompt = !!s.randomVoicePerPrompt;
+      }
+
+      // ---- Normalize every list (strip leading "-" and blanks) ----
+      LETTERS.forEach(l => {
+        lists[l] = (lists[l] || []).map(cleanItem).filter(x => x.length);
+        localStorage.setItem('promptList_' + l, JSON.stringify(lists[l]));
+      });
+      localStorage.setItem('promptListNames', JSON.stringify(names));
 
       // persist common settings
       localStorage.setItem('soundOn', soundOn);
@@ -1025,17 +1039,15 @@
         switchList(currentList);
       }
     }
-    // >>>>>>>>>>>>>>> END ADDED BLOCK <<<<<<<<<<<<<<<
+    // >>>>>>>>>>>>>>> END LOAD/IMPORT <<<<<<<<<<<<<<<
 
     // ===== Boot =====
     buildListButtons();
     buildNamesPanel();
     buildSequencePanel();
 
-    // 1) Try to import from repo JSON once (if present)
     loadInitialFromRepoJson()
       .finally(() => {
-        // 2) Load settings from localStorage and show UI
         loadSettings();
         switchList('A');
       });
