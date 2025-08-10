@@ -3,6 +3,8 @@
   "lists": {
     "A": [
       "sunny",
+      "Lemmy",
+      "Michelle",
       "Zeus",
       "Zachary",
       "Timothy",
@@ -25,6 +27,9 @@
     ],
     "B": [
       "Carlisle",
+      "Mosley", 
+      "Nottingham", 
+      "Albany",
       "Charma",
       "Larson",
       "McCartney",
@@ -40,6 +45,8 @@
     "C": [
       "- happy",
       "- sad",
+      "- curious", 
+      "- devastated",
       "- yearning",
       "- longing",
       "- regretful",
@@ -51,6 +58,10 @@
     ],
     "D": [
       "- carpenter",
+      "- doctor",
+      "- surgeon", 
+      "- "nurse",
+      "- "monk",
       "- dj",
       "- musician",
       "- plumber",
@@ -60,6 +71,12 @@
     "E": [],
     "F": [
       "- fixing a car",
+      "- doing udercover work",
+      "- inspecting",
+      "- writing a book",
+      "- making a personal note",
+      "- checking the calnedar",
+      "- paining", 
       "- sewing",
       "- preparing a cake",
       "- doing beeding",
